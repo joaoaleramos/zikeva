@@ -57,9 +57,9 @@ pub const Server = struct {
         }
     }
 
-    pub fn start(self: *Server) !void {
-        var server = try std.net.tcpListen(std.net.Address.parseIp("127.0.0.1", 6379));
-        std.debug.print("Server running on 127.0.0.1:6379\n", .{});
+    pub fn start(self: *Server, name: []const u8, port: u16) !void {
+        var server = try std.net.tcpListen(std.net.Address.parseIp(name, port));
+        std.debug.print("Server running on {s}:{d}\n", .{ name, port });
 
         while (true) {
             var client = try server.accept();
