@@ -22,10 +22,10 @@ pub const Server = struct {
         const request = buf[0..len];
 
         // Extract command (first 3-4 bytes)
-        const command = if (std.mem.startsWith(u8, request, "SET ")) Command.Set else if (std.mem.startsWith(u8, request, "GET ")) Command.Get else if (std.mem.startsWith(u8, request, "DEL ")) Command.Del else Command.Unknown;
+        const command = std.meta.stringToEnum(Command, request[0..3]) orelse return Command.Unknown;
 
         switch (command) {
-            .Set => {
+            Command.Set => {
                 var parts = std.mem.splitScalar(u8, request[4..], ' ');
                 const key = parts.next() orelse "";
                 const value = parts.next() orelse "";
@@ -33,7 +33,7 @@ pub const Server = struct {
                 try self.storage.append(request); // Log to AOF
                 try stream.writeAll("+OK\r\n");
             },
-            .Get => {
+            Command.Get => {
                 const key = request[4..];
                 if (self.db.get(key)) |value| {
                     try stream.writeAll("+");
@@ -43,7 +43,7 @@ pub const Server = struct {
                     try stream.writeAll("$-1\r\n"); // Null response
                 }
             },
-            .Del => {
+            Command.Del => {
                 const key = request[4..];
                 if (self.db.del(key)) {
                     try stream.writeAll(":1\r\n"); // Deleted
@@ -51,7 +51,7 @@ pub const Server = struct {
                     try stream.writeAll(":0\r\n"); // Not found
                 }
             },
-            .Unknown => {
+            Command.Unknown => {
                 try stream.writeAll("-ERR Unknown command\r\n");
             },
         }
