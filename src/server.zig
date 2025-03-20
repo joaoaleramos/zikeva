@@ -13,7 +13,7 @@ pub const Server = struct {
     database: Database,
     storage: Storage,
     pub fn init(allocator: std.mem.Allocator, storage_path: []const u8) !Server {
-        return Server{ .database = Database.init(allocator), .storage = Storage.init(storage_path) };
+        return Server{ .database = Database.init(allocator), .storage = try Storage.init(storage_path) };
     }
 
     pub fn handleClient(self: *Server, stream: *std.net.Stream) !void {
@@ -21,20 +21,22 @@ pub const Server = struct {
         const len = try stream.read(&buf);
         const request = buf[0..len];
 
-        // Extract command (first 3-4 bytes)
-        const command = std.meta.stringToEnum(Command, "Get") orelse Command.Unknown;
+        // Split request into tokens separated by space
+        var tokens = std.mem.splitSequence(u8, request, " ");
+        const cmd_token = tokens.next() orelse "";
+        const command = std.meta.stringToEnum(Command, cmd_token) orelse Command.Unknown;
+
         switch (command) {
             Command.Set => {
-                var parts = std.mem.splitScalar(u8, request[4..], ' ');
-                const key = parts.next() orelse "";
-                const value = parts.next() orelse "";
-                try self.db.set(key, value);
+                const key = tokens.next() orelse "";
+                const value = tokens.next() orelse "";
+                try self.database.set(key, value);
                 try self.storage.append(request); // Log to AOF
                 try stream.writeAll("+OK\r\n");
             },
             Command.Get => {
-                const key = request[4..];
-                if (self.db.get(key)) |value| {
+                const key = tokens.next() orelse "";
+                if (self.database.get(key)) |value| {
                     try stream.writeAll("+");
                     try stream.writeAll(value);
                     try stream.writeAll("\r\n");
@@ -43,8 +45,8 @@ pub const Server = struct {
                 }
             },
             Command.Del => {
-                const key = request[4..];
-                if (self.db.del(key)) {
+                const key = tokens.next() orelse "";
+                if (self.database.del(key)) {
                     try stream.writeAll(":1\r\n"); // Deleted
                 } else {
                     try stream.writeAll(":0\r\n"); // Not found
@@ -57,13 +59,17 @@ pub const Server = struct {
     }
 
     pub fn start(self: *Server, name: []const u8, port: u16) !void {
-        var server = try std.net.tcpListen(std.net.Address.parseIp(name, port));
+        const address = try std.net.Address.resolveIp(name, port);
+        var listener = try address.listen(.{});
+        defer listener.deinit(); // Clean up after exit
+
         std.debug.print("Server running on {s}:{d}\n", .{ name, port });
 
         while (true) {
-            var client = try server.accept();
+            var client = try listener.accept();
+            defer client.stream.close(); // Ensure connection closes
+
             try self.handleClient(&client.stream);
-            client.stream.close();
         }
     }
 };

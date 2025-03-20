@@ -3,7 +3,8 @@ const std = @import("std");
 pub const Storage = struct {
     file: std.fs.File,
     pub fn init(path: []const u8) !Storage {
-        const file = try std.fs.cwd().createFile(path, .{ .read = true, .write = true, .append = true });
+        const file = try std.fs.cwd().createFile(path, .{ .read = true });
+
         return Storage{ .file = file };
     }
 
