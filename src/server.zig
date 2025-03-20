@@ -22,8 +22,7 @@ pub const Server = struct {
         const request = buf[0..len];
 
         // Extract command (first 3-4 bytes)
-        const command = std.meta.stringToEnum(Command, request[0..3]) orelse return Command.Unknown;
-
+        const command = std.meta.stringToEnum(Command, "Get") orelse Command.Unknown;
         switch (command) {
             Command.Set => {
                 var parts = std.mem.splitScalar(u8, request[4..], ' ');
